@@ -18,3 +18,4 @@ Apply a ±3V analogue signal of any shape to input pin 1. Enable input pin 2 to 
 ## External hardware
 
 A function generator is useful for testing.
+I created this as part of the TT Workshop at FOSSi Down Underflow 2026.
