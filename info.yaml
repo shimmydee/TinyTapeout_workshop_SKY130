@@ -1,10 +1,10 @@
 
 # Tiny Tapeout project information
 project:
-  title:        "Seven-Segment Display with Cursor & Brightness Editing"
+  title:        "Seven-Segment Display with Cursor Editing"
   author:       "Daniel S"
   discord:      "mistershi"
-  description:  "A four-digit seven-segment display driver ported from a Basys 3 FPGA project: cursor navigation, per-segment brightness editing, PWM dimming, and three modes selectable via switches."
+  description:  "Cursor navigation across a 4-digit common-anode seven-segment display, with toggle-on/off editing and a blinking cursor. Ported from a Basys 3 FPGA project (Task 1)."
   language:     "Verilog"
   clock_hz:     25000000
 
@@ -17,17 +17,8 @@ project:
   # List your project's source files here. Source files must be in ./src and you must list each source file separately, one per line:
   source_files:
     - "project.v"
-    - "master_top.v"
     - "Task_1_TOP.v"
-    - "Task_2_TOP.v"
-    - "Task_2_frame_source.v"
-    - "Task_3_TOP.v"
-    - "Task_3_frame_source.v"
     - "SevenSegement_PWM.v"
-    - "seg_brightness_mem.v"
-    - "global_brightness_register.v"
-    - "pattern_selector.v"
-    - "pattern_store.v"
     - "button_conditioning.v"
     - "debouncer.v"
     - "heartbeat.v"
@@ -44,9 +35,9 @@ pinout:
   ui[2]: "btnD (down)"
   ui[3]: "btnL (left)"
   ui[4]: "btnR (right)"
-  ui[5]: "sw0 - level select"
-  ui[6]: "sw1 - task sel low"
-  ui[7]: "sw2 - task sel high"
+  ui[5]: "sw0 - level select (0=L1 cursor, 1=L2 toggle)"
+  ui[6]: "sw3 - autoloop enable"
+  ui[7]: ""
 
   # Outputs
   uo[0]: "seg[0] (active-low)"
@@ -59,10 +50,10 @@ pinout:
   uo[7]: "dp (active-low)"
 
   # Bidirectional pins
-  uio[0]: "sw3 - autoloop (input)"
-  uio[1]: "sw4 - page bit 0 (input)"
-  uio[2]: "sw5 - page bit 1 (input)"
-  uio[3]: "sw6 - page bit 2 (input)"
+  uio[0]: ""
+  uio[1]: ""
+  uio[2]: ""
+  uio[3]: ""
   uio[4]: "an[0] digit 0 anode (output, active-low)"
   uio[5]: "an[1] digit 1 anode (output, active-low)"
   uio[6]: "an[2] digit 2 anode (output, active-low)"

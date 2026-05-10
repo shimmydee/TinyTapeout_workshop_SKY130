@@ -59,9 +59,8 @@ async def test_reset_and_anode_mux(dut):
         f"uio_oe = {actual_oe:#04x}, expected {EXPECTED_UIO_OE:#04x}"
     )
 
-    # Select Task 1 active (sw[1]=1, sw[2]=0), Level 1 (sw[0]=0). No buttons.
-    # ui_in[6] = sw[1], ui_in[7] = sw[2], ui_in[5] = sw[0], ui_in[4:0] = buttons.
-    dut.ui_in.value  = 0b0100_0000
+    # Level 1 (cursor only): sw[0]=0. No buttons. ui_in[5] is sw[0].
+    dut.ui_in.value  = 0b0000_0000
     dut.uio_in.value = 0
 
     # Let internal resets and 1 kHz debouncer chain settle.
@@ -100,14 +99,13 @@ async def test_reset_and_anode_mux(dut):
 
 
 @cocotb.test()
-async def test_task_select_changes_output(dut):
-    """Switching between Task 1 and Task 3 must change observable behaviour.
+async def test_level1_vs_level2_changes_output(dut):
+    """Level 1 and Level 2 must produce distinguishable segment output patterns.
 
-    In Task 1, the freshly-reset cursor sits at F1 (cursorID=5) on a blank
-    canvas, so most segments are dark. In Task 3 the canvas is also blank but
-    the cursor blinks at 8 Hz over an unselected segment, producing a different
-    duty-cycle signature on the segment outputs over time. We just check the
-    integer set of observed uo_out values differs between the two modes.
+    In Level 1 the cursor lights a single segment statically (segment F of
+    digit 1 right after reset). In Level 2 the cursor blinks at 8 Hz over the
+    same blank canvas, producing different duty-cycle signatures. We just
+    check the integer set of observed uo_out values differs between the two.
     """
 
     cocotb.start_soon(Clock(dut.clk, CLOCK_PERIOD_NS, units="ns").start())
@@ -127,14 +125,14 @@ async def test_task_select_changes_output(dut):
             seen.add(int(dut.uo_out.value))
         return seen
 
-    # Task 1 active: sw[2:1] = 2'b01 -> ui_in[7:5] = 3'b010
-    task1_set = await collect(0b0100_0000, SAMPLE_CYCLES)
-    # Task 3 active: sw[2:1] = 2'b11 -> ui_in[7:5] = 3'b110
-    task3_set = await collect(0b1100_0000, SAMPLE_CYCLES)
+    # Level 1: sw[0]=0 -> ui_in[5]=0
+    level1_set = await collect(0b0000_0000, SAMPLE_CYCLES)
+    # Level 2: sw[0]=1 -> ui_in[5]=1
+    level2_set = await collect(0b0010_0000, SAMPLE_CYCLES)
 
-    assert task1_set, "Task 1 produced no segment activity at all."
-    assert task3_set, "Task 3 produced no segment activity at all."
+    assert level1_set, "Level 1 produced no segment activity at all."
+    assert level2_set, "Level 2 produced no segment activity at all."
     dut._log.info(
-        f"Task 1 distinct uo_out values: {len(task1_set)}; "
-        f"Task 3 distinct uo_out values: {len(task3_set)}."
+        f"Level 1 distinct uo_out values: {len(level1_set)}; "
+        f"Level 2 distinct uo_out values: {len(level2_set)}."
     )

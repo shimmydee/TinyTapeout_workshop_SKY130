@@ -1,37 +1,41 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  *
- * TinyTapeout wrapper for the seven-segment display project ported from
- * the Basys 3 FPGA design at https://github.com/shimmydee/FPGA_project.
+ * TinyTapeout wrapper for the Task 1 portion of the seven-segment display
+ * project ported from https://github.com/shimmydee/FPGA_project. Earlier
+ * iterations included Tasks 2 and 3 but they were dropped because the
+ * 8-page brightness RAM and 8-pattern ROM together pushed the design to
+ * ~7x the area of a 1x1 SKY130 tile.
  *
- * Pin mapping (all 24 user IO bits used):
+ * What's kept:
+ *   - Cursor navigation across all 28 segments (4 digits x 7 segments)
+ *   - Centre-button toggle in level 2
+ *   - 4 Hz / 8 Hz blinking cursor
+ *   - Autoloop mode that auto-advances the cursor
+ *   - 16-level PWM digit-mux driver (left as-is though only on/off is used)
+ *
+ * Pin mapping:
  *
  *   clk            : 25 MHz system clock
- *   rst_n          : active-low reset (replaces Basys3 sw[15])
+ *   rst_n          : active-low reset
  *
- *   ui_in[0]       : btnC
+ *   ui_in[0]       : btnC (centre - toggle in level 2)
  *   ui_in[1]       : btnU
  *   ui_in[2]       : btnD
  *   ui_in[3]       : btnL
  *   ui_in[4]       : btnR
- *   ui_in[5]       : sw[0]  - level select (1 = level 2)
- *   ui_in[6]       : sw[1]  - task active select (low bit)
- *   ui_in[7]       : sw[2]  - task active select (high bit)
+ *   ui_in[5]       : sw0 - level select (0 = level 1 cursor only, 1 = level 2 toggle)
+ *   ui_in[6]       : sw3 - autoloop enable (only meaningful in level 2)
+ *   ui_in[7]       : unused
  *
- *   uio_in[0]      : sw[3]  - autoloop enable (Task 1 level 2)
- *   uio_in[1]      : sw[4]  - Task 3 page bit 0
- *   uio_in[2]      : sw[5]  - Task 3 page bit 1
- *   uio_in[3]      : sw[6]  - Task 3 page bit 2
- *   uio_out[4]     : an[0]  - 7seg digit 0 anode (active-low)
- *   uio_out[5]     : an[1]  - 7seg digit 1 anode (active-low)
- *   uio_out[6]     : an[2]  - 7seg digit 2 anode (active-low)
- *   uio_out[7]     : an[3]  - 7seg digit 3 anode (active-low)
+ *   uio_in[3:0]    : unused (reserved)
+ *   uio_out[4]     : an[0]   digit 0 anode (active-low)
+ *   uio_out[5]     : an[1]
+ *   uio_out[6]     : an[2]
+ *   uio_out[7]     : an[3]
  *
- *   uo_out[6:0]    : seg[6:0] - 7seg cathodes (active-low, Basys3 convention)
- *   uo_out[7]      : dp       - decimal point (active-low)
- *
- * Dropped from the FPGA design (pin budget): sw[7], sw[14] (load), sw[8..13]
- * (unused on Basys3 anyway), and all 16 LEDs.
+ *   uo_out[6:0]    : seg[6:0] cathodes (active-low)
+ *   uo_out[7]      : dp (always 1 - inactive)
  */
 
 `default_nettype none
@@ -47,31 +51,25 @@ module tt_um_shimmydee_sevenseg (
     input  wire       rst_n
 );
 
-    // uio[3:0] = inputs (switches), uio[7:4] = outputs (anodes)
+    // uio[3:0] = inputs (reserved), uio[7:4] = outputs (anodes)
     assign uio_oe = 8'b1111_0000;
 
-    // Reconstruct the original 16-bit switch bus from the available pins.
-    // Unused bits are tied to 0 except sw[15] which is the global reset
-    // routed through the dedicated rst_n.
+    // Synthesise the original 16-bit switch bus from available pins. Only
+    // sw[0], sw[3], and sw[15] are read by Task_1_TOP - the rest are tied
+    // off so they synthesise away.
     wire [15:0] sw;
     assign sw[0]    = ui_in[5];
-    assign sw[1]    = ui_in[6];
-    assign sw[2]    = ui_in[7];
-    assign sw[3]    = uio_in[0];
-    assign sw[4]    = uio_in[1];
-    assign sw[5]    = uio_in[2];
-    assign sw[6]    = uio_in[3];
-    assign sw[7]    = 1'b0;
-    assign sw[13:8] = 6'b0;
-    assign sw[14]   = 1'b0;
+    assign sw[1]    = 1'b0;
+    assign sw[2]    = 1'b0;
+    assign sw[3]    = ui_in[6];
+    assign sw[14:4] = 11'b0;
     assign sw[15]   = ~rst_n;
 
-    wire [6:0]  seg;
-    wire [3:0]  an;
-    wire        dp;
-    wire [15:0] led;
+    wire [6:0] seg;
+    wire [3:0] an;
+    wire       dp;
 
-    master_top u_master (
+    Task_1_TOP u_task1 (
         .sysclk (clk),
         .btnC   (ui_in[0]),
         .btnU   (ui_in[1]),
@@ -81,8 +79,7 @@ module tt_um_shimmydee_sevenseg (
         .sw     (sw),
         .seg    (seg),
         .an     (an),
-        .dp     (dp),
-        .led    (led)
+        .dp     (dp)
     );
 
     assign uo_out[6:0]  = seg;
@@ -93,8 +90,7 @@ module tt_um_shimmydee_sevenseg (
     assign uio_out[6]   = an[2];
     assign uio_out[7]   = an[3];
 
-    // Suppress unused-signal lint warnings (ena is always 1; led[15:0] is
-    // intentionally not exposed - no pin budget for status LEDs).
-    wire _unused = &{ena, led, 1'b0};
+    // Suppress unused-signal lint warnings.
+    wire _unused = &{ena, ui_in[7], uio_in, 1'b0};
 
 endmodule
