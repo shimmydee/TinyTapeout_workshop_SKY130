@@ -6,7 +6,26 @@ SIM ?= icarus
 FST ?= -fst # Use more efficient FST format
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
-PROJECT_SOURCES = project.v hvsync_generator.v
+PROJECT_SOURCES = \
+	project.v \
+	master_top.v \
+	Task_1_TOP.v \
+	Task_2_TOP.v \
+	Task_2_frame_source.v \
+	Task_3_TOP.v \
+	Task_3_frame_source.v \
+	SevenSegement_PWM.v \
+	seg_brightness_mem.v \
+	global_brightness_register.v \
+	pattern_selector.v \
+	pattern_store.v \
+	button_conditioning.v \
+	debouncer.v \
+	heartbeat.v \
+	cursor.v \
+	spot.v \
+	toggle.v \
+	blink.v
 
 ifneq ($(GATES),yes)
 

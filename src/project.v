@@ -1,98 +1,100 @@
 /*
- * Copyright (c) 2024 Renaldas Zioma
- * based on the VGA examples by Uri Shaked
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * TinyTapeout wrapper for the seven-segment display project ported from
+ * the Basys 3 FPGA design at https://github.com/shimmydee/FPGA_project.
+ *
+ * Pin mapping (all 24 user IO bits used):
+ *
+ *   clk            : 25 MHz system clock
+ *   rst_n          : active-low reset (replaces Basys3 sw[15])
+ *
+ *   ui_in[0]       : btnC
+ *   ui_in[1]       : btnU
+ *   ui_in[2]       : btnD
+ *   ui_in[3]       : btnL
+ *   ui_in[4]       : btnR
+ *   ui_in[5]       : sw[0]  - level select (1 = level 2)
+ *   ui_in[6]       : sw[1]  - task active select (low bit)
+ *   ui_in[7]       : sw[2]  - task active select (high bit)
+ *
+ *   uio_in[0]      : sw[3]  - autoloop enable (Task 1 level 2)
+ *   uio_in[1]      : sw[4]  - Task 3 page bit 0
+ *   uio_in[2]      : sw[5]  - Task 3 page bit 1
+ *   uio_in[3]      : sw[6]  - Task 3 page bit 2
+ *   uio_out[4]     : an[0]  - 7seg digit 0 anode (active-low)
+ *   uio_out[5]     : an[1]  - 7seg digit 1 anode (active-low)
+ *   uio_out[6]     : an[2]  - 7seg digit 2 anode (active-low)
+ *   uio_out[7]     : an[3]  - 7seg digit 3 anode (active-low)
+ *
+ *   uo_out[6:0]    : seg[6:0] - 7seg cathodes (active-low, Basys3 convention)
+ *   uo_out[7]      : dp       - decimal point (active-low)
+ *
+ * Dropped from the FPGA design (pin budget): sw[7], sw[14] (load), sw[8..13]
+ * (unused on Basys3 anyway), and all 16 LEDs.
  */
 
 `default_nettype none
 
-module tt_um_shimmydee_checkers(
-  input  wire [7:0] ui_in,    // Dedicated inputs
-  output wire [7:0] uo_out,   // Dedicated outputs
-  input  wire [7:0] uio_in,   // IOs: Input path
-  output wire [7:0] uio_out,  // IOs: Output path
-  output wire [7:0] uio_oe,   // IOs: Enable path (active high: 0=input, 1=output)
-  input  wire       ena,      // always 1 when the design is powered, so you can ignore it
-  input  wire       clk,      // clock
-  input  wire       rst_n     // reset_n - low to reset
+module tt_um_shimmydee_sevenseg (
+    input  wire [7:0] ui_in,
+    output wire [7:0] uo_out,
+    input  wire [7:0] uio_in,
+    output wire [7:0] uio_out,
+    output wire [7:0] uio_oe,
+    input  wire       ena,
+    input  wire       clk,
+    input  wire       rst_n
 );
-  // increase couner every frame (vsync happens once per frame)
-  reg [9:0] counter;
-  always @(posedge vsync, negedge rst_n) begin
-    if (~rst_n) begin
-      counter <= 0;
-    end else begin
-      counter <= counter + 1;
-    end
-  end  
 
-  // animate layers
-  wire [9:0] layer_a_x = pix_x + counter*16;
-  wire [9:0] layer_a_y = pix_y + counter*2;
+    // uio[3:0] = inputs (switches), uio[7:4] = outputs (anodes)
+    assign uio_oe = 8'b1111_0000;
 
-  wire [9:0] layer_b_x = pix_x - counter*7;
-  wire [9:0] layer_b_y = pix_y - counter + counter/2;
+    // Reconstruct the original 16-bit switch bus from the available pins.
+    // Unused bits are tied to 0 except sw[15] which is the global reset
+    // routed through the dedicated rst_n.
+    wire [15:0] sw;
+    assign sw[0]    = ui_in[5];
+    assign sw[1]    = ui_in[6];
+    assign sw[2]    = ui_in[7];
+    assign sw[3]    = uio_in[0];
+    assign sw[4]    = uio_in[1];
+    assign sw[5]    = uio_in[2];
+    assign sw[6]    = uio_in[3];
+    assign sw[7]    = 1'b0;
+    assign sw[13:8] = 6'b0;
+    assign sw[14]   = 1'b0;
+    assign sw[15]   = ~rst_n;
 
-  wire [9:0] layer_c_x = pix_x + counter*4;
-  wire [9:0] layer_c_y = pix_y + counter/2;
+    wire [6:0]  seg;
+    wire [3:0]  an;
+    wire        dp;
+    wire [15:0] led;
 
-  wire [9:0] layer_d_x = pix_x + counter*2;
-  wire [9:0] layer_d_y = pix_y - counter/3;
+    master_top u_master (
+        .sysclk (clk),
+        .btnC   (ui_in[0]),
+        .btnU   (ui_in[1]),
+        .btnD   (ui_in[2]),
+        .btnL   (ui_in[3]),
+        .btnR   (ui_in[4]),
+        .sw     (sw),
+        .seg    (seg),
+        .an     (an),
+        .dp     (dp),
+        .led    (led)
+    );
 
-  wire [9:0] layer_e_x = pix_x + counter/2;
-  wire [9:0] layer_e_y = pix_y + counter/6;
+    assign uo_out[6:0]  = seg;
+    assign uo_out[7]    = dp;
+    assign uio_out[3:0] = 4'b0;
+    assign uio_out[4]   = an[0];
+    assign uio_out[5]   = an[1];
+    assign uio_out[6]   = an[2];
+    assign uio_out[7]   = an[3];
 
-  //                    checker shape          * transparency using pixel dithering
-  wire layer_a = (layer_a_x[8] ^ layer_a_y[8]) & ( pix_y[1] ^ pix_x[0]);
-  wire layer_b = (layer_b_x[7] ^ layer_b_y[7]) & (~pix_y[0] ^ pix_x[1]);
-  wire layer_c =  layer_c_x[6] ^ layer_c_y[6] ;
-  wire layer_d =  layer_d_x[5] ^ layer_d_y[5] ;
-  wire layer_e = (layer_e_x[4] ^ layer_e_y[4]) & ( pix_y[1] ^ pix_x[0]);
-
-  wire [5:0] color_a = ~ui_in[5:0]; // color of the closest layer
-  wire [5:0] color_b = color_a ^ 6'b00_11_1;
-  wire [5:0] color_c = color_b & 6'b10_10_10;
-  wire [5:0] color_de = color_c >> 1; // color of the two farthest layers
-                                      // the layer e also using dithering to darken the color
-
-  assign {R, G, B} =
-      video_active ?
-        (layer_a ? color_a :
-          (layer_b ? color_b : 
-            (layer_c ? color_c : 
-              (layer_d ? color_de :
-                (layer_e ? color_de : 6'b00_00_00))))) : 6'b00_00_00;
-
-  
-
-  // VGA signals
-  wire hsync;
-  wire vsync;
-  wire [1:0] R;
-  wire [1:0] G;
-  wire [1:0] B;
-  wire video_active;
-  wire [9:0] pix_x;
-  wire [9:0] pix_y;
-
-  // TinyVGA PMOD
-  assign uo_out = {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]};
-
-  // Unused outputs assigned to 0.
-  assign uio_out = 0;
-  assign uio_oe  = 0;
-
-  // Suppress unused signals warning
-  wire _unused_ok = &{ena, ui_in, uio_in};
-
-  hvsync_generator hvsync_gen(
-    .clk(clk),
-    .reset(~rst_n),
-    .hsync(hsync),
-    .vsync(vsync),
-    .display_on(video_active),
-    .hpos(pix_x),
-    .vpos(pix_y)
-  );
+    // Suppress unused-signal lint warnings (ena is always 1; led[15:0] is
+    // intentionally not exposed - no pin budget for status LEDs).
+    wire _unused = &{ena, led, 1'b0};
 
 endmodule
