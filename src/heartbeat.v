@@ -16,7 +16,9 @@ module heartbeat #(parameter integer THRESHOLD = 50_000) (
     output reg  dividedClk
 );
 
-    localparam integer W = 32;
+    // 24 bits cover up to 16M cycles - more than enough for the largest
+    // threshold we use (6_250_000 for the 2 Hz autoloop divider).
+    localparam integer W = 24;
     reg [W-1:0] counter;
     wire        terminal = (counter == THRESHOLD - 1);
 

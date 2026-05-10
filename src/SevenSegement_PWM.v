@@ -13,8 +13,10 @@ module SevenSegement_PWM #(parameter integer CLK_FREQ_HZ = 25_000_000, parameter
     output reg [3:0] an
 );
 
-    localparam integer SCAN_DIV = CLK_FREQ_HZ / (DIGIT_RATE_HZ * 4); // HOW MANY CLOCK CYCLES PER DIGIT = 24,414 (arbitrary)
-    localparam integer SCAN_DIV_W = 32; // ARBITRARY LARGE SIZE - DECOUPLES THE NEED TO CHANGE IT IF WE CHOOSE A DIFFERENT COUNT
+    localparam integer SCAN_DIV = CLK_FREQ_HZ / (DIGIT_RATE_HZ * 4); // HOW MANY CLOCK CYCLES PER DIGIT
+    // 16 bits cover up to 65535 cycles per digit - enough for our SCAN_DIV
+    // of ~24,414 at 25 MHz with DIGIT_RATE_HZ=256. Was 32 (overkill).
+    localparam integer SCAN_DIV_W = 16;
 
     reg [SCAN_DIV_W-1:0] scan_count; // THIS REG ACTS AS THE THRESHOLD FOR OUR 4 COUNT-UP
     reg [1:0] digit_idx; // 4 COUNT-UP THAT GETS PASSES TO SSDANODE (IS EQUIVALENT TO SAYING WHICH DIGIT IS ON)
